@@ -33,6 +33,7 @@ Original Author: Shay Gal-on
         e.g. read the value on GPIO pins connected to switches, or invoke
    special simulator functions.
 */
+extern void ulog_console_raw_printf(const char *fmt, ...);
 #if (SEED_METHOD == SEED_VOLATILE)
 extern volatile ee_s32 seed1_volatile;
 extern volatile ee_s32 seed2_volatile;

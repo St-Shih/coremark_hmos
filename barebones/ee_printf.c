@@ -16,6 +16,8 @@ limitations under the License.
 
 #include <coremark.h>
 #include <stdarg.h>
+#include <console_dev.h>
+#include <ulog.h>
 
 #define ZEROPAD   (1 << 0) /* Pad with zero */
 #define SIGN      (1 << 1) /* Unsigned/signed long */
@@ -29,10 +31,10 @@ limitations under the License.
 
 static char *    digits       = "0123456789abcdefghijklmnopqrstuvwxyz";
 static char *    upper_digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-static ee_size_t strnlen(const char *s, ee_size_t count);
+static ee_size_t ee_strnlen(const char *s, ee_size_t count);
 
 static ee_size_t
-strnlen(const char *s, ee_size_t count)
+ee_strnlen(const char *s, ee_size_t count)
 {
     const char *sc;
     for (sc = s; *sc != '\0' && count--; ++sc)
@@ -352,7 +354,7 @@ decimal_point(char *buffer)
 
     if (*buffer)
     {
-        int n = strnlen(buffer, 256);
+        int n = ee_strnlen(buffer, 256);
         while (n > 0)
         {
             buffer[n + 1] = buffer[n];
@@ -435,7 +437,7 @@ flt(char *str, double num, int size, int precision, char fmt, int flags)
     if (fmt == 'g' && !(flags & HEX_PREP))
         cropzeros(tmp);
 
-    n = strnlen(tmp, 256);
+    n = ee_strnlen(tmp, 256);
 
     // Output number with alignment and padding
     size -= n;
@@ -561,7 +563,7 @@ ee_vsprintf(char *buf, const char *fmt, va_list args)
                 s = va_arg(args, char *);
                 if (!s)
                     s = "<NULL>";
-                len = strnlen(s, precision);
+                len = ee_strnlen(s, precision);
                 if (!(flags & LEFT))
                     while (len < field_width--)
                         *str++ = ' ';
@@ -662,25 +664,32 @@ ee_vsprintf(char *buf, const char *fmt, va_list args)
 void
 uart_send_char(char c)
 {
-#error "You must implement the method uart_send_char to use this file!\n";
-    /*	Output of a char to a UART usually follows the following model:
-            Wait until UART is ready
-            Write char to UART
-            Wait until UART is done
-
-            Or in code:
-            while (*UART_CONTROL_ADDRESS != UART_READY);
-            *UART_DATA_ADDRESS = c;
-            while (*UART_CONTROL_ADDRESS != UART_READY);
-
-            Check the UART sample code on your platform or the board
-       documentation.
-    */
 }
+typedef void *Console_Handle;
+Console_Handle hdl = NULL;
 
-int
-ee_printf(const char *fmt, ...)
+int eee_printf(const char *fmt, ...)
 {
+    if (hdl == NULL)
+    {
+        LOG_I("=====================================\r\n");
+        dev_object_t *dev = dev_obj_find_precise(CONSOLE_DEV_NAME,
+                                                 DEV_OBJECT_TYPE_CONSOLE);
+#ifndef HMI_SHELL_RTT
+        Serial_Handle hdl = ((console_dev_t *)dev->dev_priv)->hdl;
+        uint32_t uart_flag = SERIAL_OPEN_TAG_TX_POLL | SERIAL_OPEN_TAG_TX_DMA;
+        uart_config_t uart_config = UART_DEFAULT_CONFIG;
+        uart_config.baudrate = 115200;
+        serial_dev_init(hdl, &uart_config);
+        serial_dev_open(hdl, uart_flag, NULL, NULL);
+#else
+        Rtt_Handle hdl = ((console_dev_t *)dev->dev_priv)->rtt_hdl;
+        uint32_t rtt_flag = RTT_OPEN_TAG_UP_INT;
+        rtt_config_t rtt_config = RTT_DEFAULT_CONFIG;
+        rtt_dev_init(hdl, &rtt_config);
+        rtt_dev_open(hdl, rtt_flag, NULL);
+#endif
+    }
     char    buf[1024], *p;
     va_list args;
     int     n = 0;
@@ -695,6 +704,11 @@ ee_printf(const char *fmt, ...)
         n++;
         p++;
     }
+#ifndef HMI_SHELL_RTT
+    serial_dev_send_polling(((console_dev_t *)hdl)->hdl, (uint8_t *)p, n, 0);
+#else
+    rtt_dev_send_polling(((console_dev_t *)hdl)->rtt_hdl, (uint8_t *)p, n, 0);
+#endif
 
     return n;
 }

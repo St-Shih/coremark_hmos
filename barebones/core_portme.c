@@ -17,7 +17,9 @@ Original Author: Shay Gal-on
 */
 #include "coremark.h"
 #include "core_portme.h"
-
+#include "cmsis_os2.h"
+#include "h_mm.h"
+extern void ulog_console_raw_printf(const char *fmt, ...);
 #if VALIDATION_RUN
 volatile ee_s32 seed1_volatile = 0x3415;
 volatile ee_s32 seed2_volatile = 0x3415;
@@ -33,6 +35,7 @@ volatile ee_s32 seed1_volatile = 0x8;
 volatile ee_s32 seed2_volatile = 0x8;
 volatile ee_s32 seed3_volatile = 0x8;
 #endif
+#define ITERATIONS 10000
 volatile ee_s32 seed4_volatile = ITERATIONS;
 volatile ee_s32 seed5_volatile = 0;
 /* Porting : Timing functions
@@ -41,11 +44,11 @@ volatile ee_s32 seed5_volatile = 0;
    cpu clock cycles performance counter etc. Sample implementation for standard
    time.h and windows.h definitions included.
 */
+extern unsigned int g_tick_count;
 CORETIMETYPE
 barebones_clock()
 {
-#error \
-    "You must implement a method to measure time in barebones_clock()! This function should return current time.\n"
+    return g_tick_count;
 }
 /* Define : TIMER_RES_DIVIDER
         Divider to trade off timer resolution and total time that can be
@@ -59,7 +62,7 @@ barebones_clock()
 #define MYTIMEDIFF(fin, ini)       ((fin) - (ini))
 #define TIMER_RES_DIVIDER          1
 #define SAMPLE_TIME_IMPLEMENTATION 1
-#define EE_TICKS_PER_SEC           (CLOCKS_PER_SEC / TIMER_RES_DIVIDER)
+#define EE_TICKS_PER_SEC (1000 / TIMER_RES_DIVIDER)
 
 /** Define Host specific (POSIX), or target specific global time variables. */
 static CORETIMETYPE start_time_val, stop_time_val;
@@ -122,6 +125,7 @@ time_in_secs(CORE_TICKS ticks)
 
 ee_u32 default_num_contexts = 1;
 
+extern void zos_ercomp_init(void);
 /* Function : portable_init
         Target specific initialization code
         Test for some common mistakes.
@@ -129,8 +133,6 @@ ee_u32 default_num_contexts = 1;
 void
 portable_init(core_portable *p, int *argc, char *argv[])
 {
-#error \
-    "Call board initialization routines in portable init (if needed), in particular initialize UART!\n"
 
     (void)argc; // prevent unused warning
     (void)argv; // prevent unused warning
@@ -139,11 +141,11 @@ portable_init(core_portable *p, int *argc, char *argv[])
     {
         ee_printf(
             "ERROR! Please define ee_ptr_int to a type that holds a "
-            "pointer!\n");
+            "pointer!\r\n");
     }
     if (sizeof(ee_u32) != 4)
     {
-        ee_printf("ERROR! Please define ee_u32 to a 32b unsigned type!\n");
+        ee_printf("ERROR! Please define ee_u32 to a 32b unsigned type!\r\n");
     }
     p->portable_id = 1;
 }
@@ -154,4 +156,8 @@ void
 portable_fini(core_portable *p)
 {
     p->portable_id = 0;
+}
+
+void *portable_malloc(size_t size) {
+    return osCapsMalloc(size, 1 << 2);
 }

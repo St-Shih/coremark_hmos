@@ -40,7 +40,7 @@ the switch/if behaviour, we are using a small moore machine.
         Benchmark function
 
         Go over the input twice, once direct, and once after introducing some
-   corruption.
+   corruption.2
 */
 ee_u16
 core_bench_state(ee_u32 blksize,
